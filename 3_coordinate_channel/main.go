@@ -5,47 +5,37 @@ Use channels for coordination between goroutines instead of using sync.WaitGroup
 package main
 
 import (
-	"log"
+	"fmt"
+	"time"
 )
 
+func worker(id int, jobs <-chan int, done chan<- bool) {
+	for job := range jobs {
+		fmt.Printf("Worker %d processing job %d\n", id, job)
+		time.Sleep(time.Millisecond * 300)
+	}
+	// Signal that this worker is done
+	done <- true
+}
+
 func main() {
-	courierChannel := make(chan string)
-	cookChannel := make(chan string)
-	done := make(chan bool) // Done signal channel
+	jobs := make(chan int, 10)
+	done := make(chan bool)
 
-	go courierWorker(courierChannel)
-	go cookWorker(courierChannel, cookChannel)
-	go waiterWorker(cookChannel, done)
+	// Create 3 workers
+	for w := 1; w <= 3; w++ {
+		go worker(w, jobs, done)
+	}
 
-	<-done // Wait for completion signal
-	log.Println("All work completed!")
-}
+	// Send 10 jobs
+	for j := 1; j <= 10; j++ {
+		jobs <- j
+	}
+	close(jobs)
 
-func courierWorker(courierChannel chan string) {
-	cakeIngredientsToShop := []string{
-		"eggs",
-		"flour",
-		"butter",
-		"chocolate",
-		"milk",
+	// Wait for all three workers to finish
+	for i := 0; i < 3; i++ {
+		<-done
 	}
-	for _, cakeIngredient := range cakeIngredientsToShop {
-		log.Println("Courier worker : sent ", cakeIngredient)
-		courierChannel <- cakeIngredient
-	}
-	close(courierChannel)
-}
-func cookWorker(courierChannel, cookChannel chan string) {
-	for value := range courierChannel {
-		log.Println("Cook worker : received ", value)
-		cookChannel <- value
-	}
-	close(cookChannel)
-}
-
-func waiterWorker(cookChannel chan string, done chan bool) {
-	for value := range cookChannel {
-		log.Println("Waiter worker : received ", value)
-	}
-	done <- true // Signal completion
+	fmt.Println("All workers completed their jobs")
 }
