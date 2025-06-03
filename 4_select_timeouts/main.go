@@ -2,29 +2,39 @@
 package main
 
 import (
-	"log"
+	"fmt"
 	"time"
 )
 
-func main() {
-	ch := make(chan string, 0)
-	timeoutCh := make(chan int, 0)
-	// slowRequest := "SLOW_REQUEST"
-	fastRequest := "FAST_REQUEST"
-	go sentRequest(ch, fastRequest, timeoutCh)
-	select {
-	case value := <-ch:
-		if value == "SLOW_REQUEST" {
-			time.Sleep(5 * time.Second)
-		} else {
-			time.Sleep(1 * time.Second)
-		}
-	case second := <-timeoutCh:
-		time.Sleep(time.Duration(second * int(time.Second)))
-		log.Println("TIMEOUT")
-		return
-	}
+func slowProcess(ch chan<- string) {
+	time.Sleep(time.Second * 2)
+	ch <- "Result from slow process"
 }
-func sentRequest(ch chan string, value string, timeoutCh chan int) {
-	ch <- value
+
+func fastProcess(ch chan<- string) {
+	time.Sleep(time.Second * 1)
+	ch <- "Result from fast process"
+}
+
+func main() {
+	slow := make(chan string)
+	fast := make(chan string)
+
+	go slowProcess(slow)
+	go fastProcess(fast)
+
+	// Wait for results with a timeout
+	timeout := time.After(time.Second * 3)
+
+	for i := 0; i < 2; i++ {
+		select {
+		case result := <-slow:
+			fmt.Println(result)
+		case result := <-fast:
+			fmt.Println(result)
+		case <-timeout:
+			fmt.Println("Timed out waiting for a process")
+			return
+		}
+	}
 }
